@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Farkle – Würfelspiel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Lato:wght@300;400;700&display=swap');
+
+  :root {
+    --felt: #1a3a2a;
+    --felt-light: #22503a;
+    --gold: #c9a84c;
+    --gold-light: #f0d080;
+    --cream: #f5f0e8;
+    --red: #c0392b;
+    --red-light: #e74c3c;
+    --white: #ffffff;
+    --shadow: rgba(0,0,0,0.5);
+    --p1color: #3498db;
+    --p2color: #e67e22;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: radial-gradient(ellipse at center, #0d2418 0%, #060e09 100%);
+    min-height: 100vh;
+    font-family: 'Lato', sans-serif;
+    color: var(--cream);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    user-select: none;
+  }
+
+  h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 2.8rem;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 0 30px rgba(201,168,76,0.5), 2px 2px 0 #5a3a00;
+    letter-spacing: 0.12em;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    opacity: 0.7;
+    margin-bottom: 24px;
+  }
+
+  /* SCORE BOARDS */
+  .scoreboards {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 20px;
+  }
+
+  .scoreboard {
+    flex: 1;
+    background: linear-gradient(160deg, #1e4a32 0%, #122e1e 100%);
+    border: 2px solid #2d6642;
+    border-radius: 14px;
+    padding: 16px 20px;
+    transition: all 0.4s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scoreboard::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--gold);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .scoreboard.active::before { opacity: 1; }
+
+  .scoreboard.active {
+    border-color: var(--gold);
+    box-shadow: 0 0 20px rgba(201,168,76,0.2);
+  }
+
+  .player-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    margin-bottom: 2px;
+  }
+
+  .player-name {
+    font-family: 'Cinzel', serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .scoreboard:nth-child(1) .player-name { color: var(--p1color); }
+  .scoreboard:nth-child(2) .player-name { color: var(--p2color); }
+
+  .score-total {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1;
+  }
+
+  .score-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    margin-top: 2px;
+  }
+
+  .score-round {
+    font-size: 1rem;
+    color: var(--gold-light);
+    margin-top: 6px;
+    font-weight: 300;
+  }
+
+  /* GAME TABLE */
+  .table {
+    background: radial-gradient(ellipse at center, var(--felt-light) 0%, var(--felt) 100%);
+    border: 3px solid #3a6648;
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 720px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+    position: relative;
+  }
+
+  /* STATUS */
+  .status-bar {
+    text-align: center;
+    margin-bottom: 22px;
+  }
+
+  .turn-indicator {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+    color: var(--gold-light);
+    margin-bottom: 4px;
+  }
+
+  .status-msg {
+    font-size: 1.4rem;
+    font-weight: 700;
+    min-height: 2rem;
+    transition: all 0.3s;
+  }
+
+  .status-msg.farkle {
+    color: var(--red-light);
+    animation: shake 0.5s ease;
+  }
+
+  .status-msg.hot {
+    color: #f39c12;
+    animation: pulse 0.5s ease;
+  }
+
+  .status-msg.good {
+    color: #2ecc71;
+  }
+
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-8px)}
+    40%{transform:translateX(8px)}
+    60%{transform:translateX(-6px)}
+    80%{transform:translateX(6px)}
+  }
+
+  @keyframes pulse {
+    0%{transform:scale(1)}
+    50%{transform:scale(1.08)}
+    100%{transform:scale(1)}
+  }
+
+  /* DICE AREA */
+  .dice-area {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .die-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .die {
+    width: 72px;
+    height: 72px;
+    background: var(--white);
+    border-radius: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.8);
+    transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+    position: relative;
+    user-select: none;
+    border: 3px solid transparent;
+  }
+
+  .die:hover:not(.locked):not(.rolling):not(.used) {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+  }
+
+  .die.selected {
+    background: #fffde0;
+    border-color: var(--gold);
+    transform: translateY(-6px);
+    box-shadow: 0 8px 20px rgba(201,168,76,0.5);
+  }
+
+  .die.locked {
+    background: #d4edda;
+    border-color: #27ae60;
+    cursor: default;
+    opacity: 0.85;
+  }
+
+  .die.used {
+    background: #eee;
+    opacity: 0.3;
+    cursor: default;
+    border-color: transparent;
+    transform: none;
+  }
+
+  .die.rolling {
+    animation: roll 0.6s ease;
+    cursor: default;
+  }
+
+  @keyframes roll {
+    0%   { transform: rotate(0deg) scale(1); }
+    15%  { transform: rotate(-20deg) scale(1.1); }
+    35%  { transform: rotate(25deg) scale(0.95); }
+    55%  { transform: rotate(-15deg) scale(1.05); }
+    75%  { transform: rotate(10deg) scale(0.98); }
+    90%  { transform: rotate(-5deg) scale(1.02); }
+    100% { transform: rotate(0deg) scale(1); }
+  }
+
+  .die-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #8fc9a0;
+    font-weight: 700;
+    min-height: 14px;
+  }
+
+  .die.selected + .die-label,
+  .die-wrapper.selected .die-label {
+    color: var(--gold-light);
+  }
+
+  /* SCORE PREVIEW */
+  .score-preview {
+    text-align: center;
+    margin-bottom: 18px;
+    font-size: 1rem;
+    color: var(--gold-light);
+    min-height: 1.5rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+  }
+
+  .score-preview span {
+    font-weight: 700;
+    color: var(--gold);
+    font-size: 1.2rem;
+  }
+
+  /* BUTTONS */
+  .button-row {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 14px 28px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  .btn-roll {
+    background: linear-gradient(135deg, #c9a84c, #a07828);
+    color: #1a1a0a;
+    box-shadow: 0 4px 14px rgba(201,168,76,0.4);
+  }
+
+  .btn-roll:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(201,168,76,0.6);
+    background: linear-gradient(135deg, #f0d080, #c9a84c);
+  }
+
+  .btn-bank {
+    background: linear-gradient(135deg, #27ae60, #1a7a42);
+    color: white;
+    box-shadow: 0 4px 14px rgba(39,174,96,0.3);
+  }
+
+  .btn-bank:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(39,174,96,0.5);
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+  }
+
+  .btn-lock {
+    background: linear-gradient(135deg, #2980b9, #1a5f85);
+    color: white;
+    box-shadow: 0 4px 14px rgba(41,128,185,0.3);
+  }
+
+  .btn-lock:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(41,128,185,0.5);
+  }
+
+  /* SCORING LEGEND */
+  .legend {
+    margin-top: 24px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 12px;
+    padding: 16px 20px;
+    width: 100%;
+    max-width: 720px;
+  }
+
+  .legend-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 6px 20px;
+  }
+
+  .legend-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: rgba(245,240,232,0.7);
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .legend-row .pts {
+    font-weight: 700;
+    color: var(--gold-light);
+  }
+
+  /* OVERLAY */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .overlay.show { display: flex; }
+
+  .modal {
+    background: linear-gradient(160deg, #1e4a32, #0d2418);
+    border: 2px solid var(--gold);
+    border-radius: 20px;
+    padding: 40px 48px;
+    text-align: center;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 0 60px rgba(201,168,76,0.3);
+    animation: modalIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  @keyframes modalIn {
+    from { transform: scale(0.7); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .modal-title {
+    font-family: 'Cinzel', serif;
+    font-size: 2rem;
+    color: var(--gold);
+    text-shadow: 0 0 20px rgba(201,168,76,0.4);
+    margin-bottom: 8px;
+  }
+
+  .modal-sub {
+    font-size: 0.85rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    opacity: 0.6;
+    margin-bottom: 24px;
+  }
+
+  .modal-body {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: rgba(245,240,232,0.85);
+    margin-bottom: 30px;
+  }
+
+  .modal-body strong { color: var(--gold-light); }
+
+  .name-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .name-input {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'Lato', sans-serif;
+    font-size: 1rem;
+    color: var(--cream);
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .name-input:focus { border-color: var(--gold); }
+  .name-input::placeholder { opacity: 0.4; }
+
+  .winner-icon {
+    font-size: 4rem;
+    margin-bottom: 12px;
+    animation: bounce 1s ease infinite;
+  }
+
+  @keyframes bounce {
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-10px)}
+  }
+
+  /* FARKLE FLASH */
+  .farkle-flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(192,57,43,0.25);
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+
+  .farkle-flash.show {
+    animation: flashRed 0.6s ease;
+  }
+
+  @keyframes flashRed {
+    0%{opacity:0} 30%{opacity:1} 100%{opacity:0}
+  }
+
+  /* HOT DICE FLASH */
+  .hot-flash {
+    position: fixed;
+    inset: 0;
+    background: rgba(243,156,18,0.2);
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+  }
+
+  .hot-flash.show {
+    animation: flashGold 0.8s ease;
+  }
+
+  @keyframes flashGold {
+    0%{opacity:0} 40%{opacity:1} 100%{opacity:0}
+  }
+
+  /* PROGRESS BAR */
+  .progress-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  /* LAST ROUND BANNER */
+  .last-round-banner {
+    display: none;
+    background: linear-gradient(90deg, var(--red), #8e1c10);
+    text-align: center;
+    padding: 8px;
+    border-radius: 8px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    animation: pulse 1s ease infinite;
+  }
+
+  .last-round-banner.show { display: block; }
+</style>
+</head>
+<body>
+
+<h1>FARKLE</h1>
+<p class="subtitle">Das Würfelspiel des Risikos</p>
+
+<!-- Score Boards -->
+<div class="scoreboards">
+  <div class="scoreboard active" id="sb0">
+    <div class="player-label">Spieler 1</div>
+    <div class="player-name" id="pname0">Spieler 1</div>
+    <div class="score-total" id="ptotal0">0</div>
+    <div class="score-label">Punkte</div>
+    <div class="progress-bar"><div class="progress-fill" id="prog0" style="width:0%"></div></div>
+    <div class="score-round" id="pround0"></div>
+  </div>
+  <div class="scoreboard" id="sb1">
+    <div class="player-label">Spieler 2</div>
+    <div class="player-name" id="pname1">Spieler 2</div>
+    <div class="score-total" id="ptotal1">0</div>
+    <div class="score-label">Punkte</div>
+    <div class="progress-bar"><div class="progress-fill" id="prog1" style="width:0%"></div></div>
+    <div class="score-round" id="pround1"></div>
+  </div>
+</div>
+
+<!-- Game Table -->
+<div class="table">
+  <div class="last-round-banner" id="lastRoundBanner">⚠ Letzte Runde – Jeder hat noch einen Zug!</div>
+
+  <div class="status-bar">
+    <div class="turn-indicator" id="turnIndicator">Runde 1 · Spieler 1 ist am Zug</div>
+    <div class="status-msg" id="statusMsg">Würfle, um zu beginnen!</div>
+  </div>
+
+  <div class="dice-area" id="diceArea"></div>
+
+  <div class="score-preview" id="scorePreview"></div>
+
+  <div class="button-row">
+    <button class="btn btn-roll" id="btnRoll" onclick="rollDice()">🎲 Würfeln</button>
+    <button class="btn btn-lock" id="btnLock" onclick="lockSelected()" disabled>✔ Behalten</button>
+    <button class="btn btn-bank" id="btnBank" onclick="bankPoints()" disabled>💰 Einbanken</button>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-title">Punktetabelle</div>
+  <div class="legend-grid">
+    <div class="legend-row"><span>Einzelne 1</span><span class="pts">100</span></div>
+    <div class="legend-row"><span>Einzelne 5</span><span class="pts">50</span></div>
+    <div class="legend-row"><span>Drilling 1er</span><span class="pts">300</span></div>
+    <div class="legend-row"><span>Drilling 2er–6er</span><span class="pts">100 × Augenzahl</span></div>
+    <div class="legend-row"><span>Vierling</span><span class="pts">2× Drilling</span></div>
+    <div class="legend-row"><span>Fünfling</span><span class="pts">3× Drilling</span></div>
+    <div class="legend-row"><span>Sechsling</span><span class="pts">4× Drilling</span></div>
+    <div class="legend-row"><span>Straße (1–2–3–4–5–6)</span><span class="pts">1500</span></div>
+    <div class="legend-row"><span>Drei Paare</span><span class="pts">1500</span></div>
+  </div>
+</div>
+
+<!-- Overlays -->
+<div class="farkle-flash" id="farkleFlash"></div>
+<div class="hot-flash" id="hotFlash"></div>
+
+<!-- Start Modal -->
+<div class="overlay show" id="startOverlay">
+  <div class="modal">
+    <div class="modal-title">FARKLE</div>
+    <div class="modal-sub">Zwei Spieler · Ein Würfelbecher</div>
+    <div class="modal-body">
+      Wer als Erster <strong>10.000 Punkte</strong> erreicht, löst die Schlussrunde aus.<br>
+      Danach hat der andere Spieler noch einen letzten Zug.
+    </div>
+    <div class="name-inputs">
+      <input class="name-input" id="input0" placeholder="Name Spieler 1" maxlength="16" value="Spieler 1">
+      <input class="name-input" id="input1" placeholder="Name Spieler 2" maxlength="16" value="Spieler 2">
+    </div>
+    <button class="btn btn-roll" onclick="startGame()" style="width:100%;font-size:1rem;padding:16px;">Spiel starten</button>
+  </div>
+</div>
+
+<!-- Winner Modal -->
+<div class="overlay" id="winOverlay">
+  <div class="modal">
+    <div class="winner-icon">🏆</div>
+    <div class="modal-title" id="winTitle">Spieler 1</div>
+    <div class="modal-sub">gewinnt das Spiel!</div>
+    <div class="modal-body" id="winBody"></div>
+    <button class="btn btn-roll" onclick="resetGame()" style="width:100%;font-size:1rem;padding:16px;">Neues Spiel</button>
+  </div>
+</div>
+
+<script>
+// ─── GAME STATE ────────────────────────────────────────────────────────────────
+const GOAL = 10000;
+const DICE_FACES = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+
+let state = {
+  players: ['Spieler 1', 'Spieler 2'],
+  scores: [0, 0],
+  current: 0,           // active player index
+  round: 1,
+  dice: [],             // [{value, selected, locked, used}]
+  roundScore: 0,        // total accumulated this turn (locked dice)
+  rolling: false,
+  hasRolled: false,
+  finalRound: false,
+  finalRoundStarter: -1,
+  finalRoundDone: [false, false],
+  gameOver: false,
+};
+
+function startGame() {
+  const n0 = document.getElementById('input0').value.trim() || 'Spieler 1';
+  const n1 = document.getElementById('input1').value.trim() || 'Spieler 2';
+  state.players = [n0, n1];
+  document.getElementById('pname0').textContent = n0;
+  document.getElementById('pname1').textContent = n1;
+  document.getElementById('startOverlay').classList.remove('show');
+  initDice(6);
+  updateUI();
+}
+
+function initDice(count) {
+  state.dice = Array.from({length: count}, () => ({
+    value: 1, selected: false, locked: false, used: false
+  }));
+  state.hasRolled = false;
+  renderDice();
+}
+
+function resetGame() {
+  document.getElementById('winOverlay').classList.remove('show');
+  state = {
+    players: state.players,
+    scores: [0, 0],
+    current: 0,
+    round: 1,
+    dice: [],
+    roundScore: 0,
+    rolling: false,
+    hasRolled: false,
+    finalRound: false,
+    finalRoundStarter: -1,
+    finalRoundDone: [false, false],
+    gameOver: false,
+  };
+  document.getElementById('lastRoundBanner').classList.remove('show');
+  initDice(6);
+  updateUI();
+}
+
+// ─── DICE RENDERING ────────────────────────────────────────────────────────────
+function renderDice() {
+  const area = document.getElementById('diceArea');
+  area.innerHTML = '';
+  state.dice.forEach((d, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'die-wrapper';
+
+    const die = document.createElement('div');
+    die.className = 'die';
+    if (d.locked) die.classList.add('locked');
+    else if (d.used) die.classList.add('used');
+    else if (d.selected) die.classList.add('selected');
+    die.textContent = DICE_FACES[d.value - 1];
+    die.onclick = () => toggleSelect(i);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'die-label';
+    if (d.locked) lbl.textContent = 'Behalten';
+    else if (d.used) lbl.textContent = '';
+    else if (d.selected) lbl.textContent = 'Auswählen';
+    else lbl.textContent = '';
+
+    wrap.appendChild(die);
+    wrap.appendChild(lbl);
+    area.appendChild(wrap);
+  });
+}
+
+function animateRoll(indices) {
+  return new Promise(resolve => {
+    const area = document.getElementById('diceArea');
+    const dies = area.querySelectorAll('.die');
+    indices.forEach(i => {
+      if (!state.dice[i].locked && !state.dice[i].used) {
+        dies[i].classList.add('rolling');
+      }
+    });
+    setTimeout(resolve, 650);
+  });
+}
+
+// ─── TOGGLE SELECTION ──────────────────────────────────────────────────────────
+function toggleSelect(i) {
+  const d = state.dice[i];
+  if (!state.hasRolled || d.locked || d.used || state.rolling) return;
+  d.selected = !d.selected;
+  renderDice();
+  updateScorePreview();
+  updateButtons();
+}
+
+// ─── ROLL ─────────────────────────────────────────────────────────────────────
+async function rollDice() {
+  if (state.rolling || state.gameOver) return;
+
+  // Determine which dice to roll
+  const freeIndices = state.dice
+    .map((d, i) => (!d.locked && !d.used && !d.selected) ? i : -1)
+    .filter(i => i >= 0);
+
+  // If all dice used → hot dice → reset used/selected
+  const availCount = state.dice.filter(d => !d.locked && !d.used).length;
+  const selectedCount = state.dice.filter(d => d.selected).length;
+
+  let rollIndices;
+  if (availCount === 0) {
+    // Hot dice – reroll all
+    state.dice.forEach(d => { d.locked = false; d.used = false; d.selected = false; });
+    rollIndices = state.dice.map((_, i) => i);
+  } else {
+    // Deselect before rolling remaining
+    state.dice.forEach(d => { if (!d.locked && !d.used) d.selected = false; });
+    rollIndices = state.dice.map((d, i) => (!d.locked && !d.used) ? i : -1).filter(i => i >= 0);
+  }
+
+  state.rolling = true;
+  document.getElementById('btnRoll').disabled = true;
+  document.getElementById('btnLock').disabled = true;
+  document.getElementById('btnBank').disabled = true;
+  document.getElementById('statusMsg').textContent = '...';
+  document.getElementById('statusMsg').className = 'status-msg';
+
+  renderDice();
+  await animateRoll(rollIndices);
+
+  // Set new values
+  rollIndices.forEach(i => {
+    state.dice[i].value = Math.ceil(Math.random() * 6);
+    state.dice[i].selected = false;
+  });
+
+  state.hasRolled = true;
+  state.rolling = false;
+  renderDice();
+
+  // Check for farkle
+  const freeValues = state.dice.filter(d => !d.locked && !d.used).map(d => d.value);
+  if (!hasAnyScore(freeValues)) {
+    // FARKLE!
+    triggerFarkle();
+    return;
+  }
+
+  updateScorePreview();
+  updateButtons();
+  updateUI();
+}
+
+function triggerFarkle() {
+  document.getElementById('farkleFlash').classList.remove('show');
+  void document.getElementById('farkleFlash').offsetWidth;
+  document.getElementById('farkleFlash').classList.add('show');
+
+  const msg = document.getElementById('statusMsg');
+  msg.textContent = `💥 FARKLE! ${state.players[state.current]} verliert ${state.roundScore} Punkte!`;
+  msg.className = 'status-msg farkle';
+
+  // reset round
+  state.roundScore = 0;
+  state.dice.forEach(d => { d.locked = false; d.used = false; d.selected = false; });
+  state.hasRolled = false;
+
+  setTimeout(() => {
+    nextPlayer();
+  }, 1800);
+}
+
+// ─── LOCK SELECTED ────────────────────────────────────────────────────────────
+function lockSelected() {
+  const selected = state.dice.filter(d => d.selected);
+  if (selected.length === 0) return;
+
+  const pts = scoreForDice(selected.map(d => d.value));
+  if (pts === 0) return;
+
+  selected.forEach(d => { d.locked = true; d.selected = false; });
+  state.roundScore += pts;
+
+  const msg = document.getElementById('statusMsg');
+  msg.textContent = `+${pts} Punkte gesichert`;
+  msg.className = 'status-msg good';
+
+  // Check hot dice
+  const anyFree = state.dice.some(d => !d.locked && !d.used);
+  if (!anyFree) {
+    document.getElementById('hotFlash').classList.remove('show');
+    void document.getElementById('hotFlash').offsetWidth;
+    document.getElementById('hotFlash').classList.add('show');
+    msg.textContent = '🔥 Hot Dice! Alle Würfel neu!';
+    msg.className = 'status-msg hot';
+    setTimeout(() => {
+      state.dice.forEach(d => { d.locked = false; d.used = false; d.selected = false; });
+      state.hasRolled = false;
+      renderDice();
+      updateButtons();
+      updateUI();
+    }, 900);
+    return;
+  }
+
+  renderDice();
+  updateScorePreview();
+  updateButtons();
+  updateUI();
+}
+
+// ─── BANK ─────────────────────────────────────────────────────────────────────
+function bankPoints() {
+  if (state.roundScore === 0) return;
+
+  // Also lock any currently selected dice first
+  const selected = state.dice.filter(d => d.selected);
+  if (selected.length > 0) {
+    const pts = scoreForDice(selected.map(d => d.value));
+    if (pts > 0) {
+      selected.forEach(d => { d.locked = true; d.selected = false; });
+      state.roundScore += pts;
+    }
+  }
+
+  const banked = state.roundScore;
+  state.scores[state.current] += banked;
+  state.roundScore = 0;
+
+  const msg = document.getElementById('statusMsg');
+  msg.textContent = `✅ ${banked} Punkte eingebankt!`;
+  msg.className = 'status-msg good';
+
+  // Progress
+  updateScoreBoards();
+
+  // Check win condition
+  if (!state.finalRound && state.scores[state.current] >= GOAL) {
+    state.finalRound = true;
+    state.finalRoundStarter = state.current;
+    document.getElementById('lastRoundBanner').classList.add('show');
+  }
+
+  // Check if final round is over
+  if (state.finalRound) {
+    state.finalRoundDone[state.current] = true;
+    const otherPlayer = 1 - state.finalRoundStarter;
+    if (state.finalRoundDone[state.finalRoundStarter] && state.finalRoundDone[otherPlayer]) {
+      setTimeout(endGame, 800);
+      return;
+    }
+    // If starter just finished, other player still needs their turn
+    if (state.current === state.finalRoundStarter && !state.finalRoundDone[otherPlayer]) {
+      setTimeout(nextPlayer, 1200);
+      return;
+    }
+    // Other player just finished
+    if (state.current === otherPlayer) {
+      setTimeout(endGame, 800);
+      return;
+    }
+  }
+
+  setTimeout(nextPlayer, 1200);
+}
+
+// ─── NEXT PLAYER ──────────────────────────────────────────────────────────────
+function nextPlayer() {
+  state.current = 1 - state.current;
+  if (state.current === 0) state.round++;
+  state.roundScore = 0;
+  state.dice.forEach(d => { d.locked = false; d.used = false; d.selected = false; d.value = 1; });
+  state.hasRolled = false;
+  renderDice();
+  updateScorePreview();
+  updateButtons();
+  updateUI();
+  document.getElementById('statusMsg').textContent = 'Würfle, um zu beginnen!';
+  document.getElementById('statusMsg').className = 'status-msg';
+}
+
+// ─── END GAME ─────────────────────────────────────────────────────────────────
+function endGame() {
+  state.gameOver = true;
+  const s0 = state.scores[0], s1 = state.scores[1];
+  let winner, loser, winIdx;
+  if (s0 > s1) { winner = state.players[0]; loser = state.players[1]; winIdx = 0; }
+  else if (s1 > s0) { winner = state.players[1]; loser = state.players[0]; winIdx = 1; }
+  else { winner = 'Unentschieden'; winIdx = -1; }
+
+  document.getElementById('winTitle').textContent = winner;
+  document.getElementById('winBody').innerHTML =
+    winIdx >= 0
+      ? `<strong>${state.players[0]}</strong>: ${s0.toLocaleString('de')} Punkte<br><strong>${state.players[1]}</strong>: ${s1.toLocaleString('de')} Punkte`
+      : `Beide Spieler haben <strong>${s0.toLocaleString('de')}</strong> Punkte!`;
+  document.querySelector('#winOverlay .modal-sub').textContent =
+    winIdx >= 0 ? 'gewinnt das Spiel!' : 'Unentschieden!';
+
+  document.getElementById('winOverlay').classList.add('show');
+}
+
+// ─── SCORING LOGIC ─────────────────────────────────────────────────────────────
+function hasAnyScore(values) {
+  return scoreForDice(values) > 0 || detectStraight(values) > 0 || detectThreePairs(values) > 0;
+}
+
+function scoreForDice(values) {
+  if (values.length === 0) return 0;
+
+  // Check straight first
+  if (detectStraight(values)) return 1500;
+  if (detectThreePairs(values)) return 1500;
+
+  const counts = Array(7).fill(0);
+  values.forEach(v => counts[v]++);
+
+  let score = 0;
+  for (let face = 1; face <= 6; face++) {
+    const c = counts[face];
+    if (c === 0) continue;
+    if (c >= 3) {
+      // Base triplet value
+      let base = face === 1 ? 300 : face * 100;
+      let mult = 1;
+      if (c === 4) mult = 2;
+      else if (c === 5) mult = 3;
+      else if (c === 6) mult = 4;
+      score += base * mult;
+    } else {
+      // Singles
+      if (face === 1) score += c * 100;
+      else if (face === 5) score += c * 50;
+    }
+  }
+  return score;
+}
+
+function detectStraight(values) {
+  if (values.length !== 6) return 0;
+  const s = [...values].sort((a,b)=>a-b);
+  return JSON.stringify(s) === JSON.stringify([1,2,3,4,5,6]) ? 1500 : 0;
+}
+
+function detectThreePairs(values) {
+  if (values.length !== 6) return 0;
+  const counts = Array(7).fill(0);
+  values.forEach(v => counts[v]++);
+  const pairs = counts.filter(c => c === 2).length;
+  return pairs === 3 ? 1500 : 0;
+}
+
+// ─── SCORE PREVIEW ────────────────────────────────────────────────────────────
+function updateScorePreview() {
+  const selected = state.dice.filter(d => d.selected).map(d => d.value);
+  const preview = document.getElementById('scorePreview');
+  if (selected.length === 0) {
+    const locked = state.roundScore;
+    preview.innerHTML = locked > 0
+      ? `Gesamte Runde: <span>${locked.toLocaleString('de')}</span> Punkte`
+      : '';
+    return;
+  }
+  const pts = scoreForDice(selected);
+  if (pts === 0) {
+    preview.innerHTML = '<span style="color:#e74c3c">Keine Punkte für diese Auswahl!</span>';
+  } else {
+    preview.innerHTML = `Auswahl: +<span>${pts}</span> Punkte · Runde gesamt: <span>${(state.roundScore + pts).toLocaleString('de')}</span>`;
+  }
+}
+
+// ─── BUTTONS ──────────────────────────────────────────────────────────────────
+function updateButtons() {
+  const hasSelected = state.dice.some(d => d.selected);
+  const selectedPts = hasSelected ? scoreForDice(state.dice.filter(d => d.selected).map(d => d.value)) : 0;
+  const canBank = state.roundScore > 0 || (hasSelected && selectedPts > 0);
+  const freeCount = state.dice.filter(d => !d.locked && !d.used).length;
+
+  document.getElementById('btnRoll').disabled = state.rolling || !state.hasRolled === false && state.hasRolled && hasSelected;
+  document.getElementById('btnRoll').disabled = state.rolling || state.gameOver;
+
+  // Can roll if: not rolling AND (not yet rolled OR has locked some dice this turn)
+  const hasLocked = state.dice.some(d => d.locked);
+  const canRoll = !state.rolling && !state.gameOver && (!state.hasRolled || hasLocked || freeCount === state.dice.length);
+  document.getElementById('btnRoll').disabled = !canRoll || (state.hasRolled && !hasLocked && !hasSelected);
+
+  // Simplify: after rolling, can roll again after locking at least one die
+  document.getElementById('btnRoll').disabled = state.rolling || state.gameOver ||
+    (state.hasRolled && !hasLocked);
+
+  document.getElementById('btnLock').disabled = !hasSelected || selectedPts === 0 || state.rolling;
+  document.getElementById('btnBank').disabled = !canBank || state.rolling || !state.hasRolled;
+}
+
+// ─── UI UPDATE ────────────────────────────────────────────────────────────────
+function updateUI() {
+  updateScoreBoards();
+  const cur = state.current;
+  document.getElementById('turnIndicator').textContent =
+    `Runde ${state.round} · ${state.players[cur]} ist am Zug`;
+
+  document.getElementById('sb0').classList.toggle('active', cur === 0);
+  document.getElementById('sb1').classList.toggle('active', cur === 1);
+
+  const rnd0 = document.getElementById('pround0');
+  const rnd1 = document.getElementById('pround1');
+  if (cur === 0 && state.roundScore > 0) {
+    rnd0.textContent = `+ ${state.roundScore.toLocaleString('de')} in dieser Runde`;
+  } else { rnd0.textContent = ''; }
+  if (cur === 1 && state.roundScore > 0) {
+    rnd1.textContent = `+ ${state.roundScore.toLocaleString('de')} in dieser Runde`;
+  } else { rnd1.textContent = ''; }
+}
+
+function updateScoreBoards() {
+  for (let i = 0; i < 2; i++) {
+    document.getElementById(`ptotal${i}`).textContent = state.scores[i].toLocaleString('de');
+    const pct = Math.min(100, (state.scores[i] / GOAL) * 100);
+    document.getElementById(`prog${i}`).style.width = pct + '%';
+  }
+}
+
+// Enter key for name inputs
+document.getElementById('input0').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('input1').focus(); });
+document.getElementById('input1').addEventListener('keydown', e => { if(e.key==='Enter') startGame(); });
+
+// Init
+initDice(6);
+updateUI();
+</script>
+</body>
+</html>
