@@ -212,45 +212,57 @@
   .die {
     width: 90px;
     height: 90px;
-    background: var(--white);
-    border-radius: 16px;
+    background: linear-gradient(145deg, #ffffff 0%, #ddd0be 100%);
+    border-radius: 14px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 3rem;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.8);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    padding: 11px;
+    box-shadow:
+      4px 8px 0 #c2a47a,
+      7px 13px 22px rgba(0,0,0,0.6),
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 1px 0 0 rgba(255,255,255,0.5);
     transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
     position: relative;
     user-select: none;
-    border: 3px solid transparent;
   }
 
   .die:hover:not(.locked):not(.rolling):not(.used) {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+    transform: translateY(-5px);
+    box-shadow:
+      4px 13px 0 #c2a47a,
+      7px 18px 24px rgba(0,0,0,0.65),
+      inset 0 1px 0 rgba(255,255,255,1);
   }
 
   .die.selected {
-    background: #fffde0;
-    border-color: var(--gold);
-    transform: translateY(-6px);
-    box-shadow: 0 8px 20px rgba(201,168,76,0.5);
+    background: linear-gradient(145deg, #fffde8 0%, #f2d855 100%);
+    transform: translateY(-9px);
+    box-shadow:
+      4px 15px 0 #9a7c08,
+      7px 20px 26px rgba(0,0,0,0.7),
+      inset 0 1px 0 rgba(255,255,255,0.95);
   }
 
   .die.locked {
-    background: #d4edda;
-    border-color: #27ae60;
+    background: linear-gradient(145deg, #f0fff5 0%, #86d4a2 100%);
     cursor: default;
-    opacity: 0.85;
+    box-shadow:
+      4px 8px 0 #1a7236,
+      7px 13px 20px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.9);
   }
 
   .die.used {
-    background: #eee;
-    opacity: 0.3;
+    background: linear-gradient(145deg, #e4e4e4 0%, #bcb4aa 100%);
+    opacity: 0.28;
     cursor: default;
-    border-color: transparent;
     transform: none;
+    box-shadow:
+      3px 5px 0 #949494,
+      5px 8px 12px rgba(0,0,0,0.28);
   }
 
   .die.rolling {
@@ -267,6 +279,17 @@
     90%  { transform: rotate(-5deg) scale(1.02); }
     100% { transform: rotate(0deg) scale(1); }
   }
+
+  .pip {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #4a3010, #130600);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.08);
+    place-self: center;
+  }
+
+  .pip.hidden { visibility: hidden; }
 
   .die-label {
     font-size: 0.65rem;
@@ -659,7 +682,25 @@
 <script>
 // ─── GAME STATE ────────────────────────────────────────────────────────────────
 const GOAL = 10000;
-const DICE_FACES = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+const PIP_MAP = {
+  1: new Set([4]),
+  2: new Set([2, 6]),
+  3: new Set([2, 4, 6]),
+  4: new Set([0, 2, 6, 8]),
+  5: new Set([0, 2, 4, 6, 8]),
+  6: new Set([0, 2, 3, 5, 6, 8]),
+};
+
+function createDieFace(value) {
+  const active = PIP_MAP[value];
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 9; i++) {
+    const pip = document.createElement('div');
+    pip.className = active.has(i) ? 'pip' : 'pip hidden';
+    frag.appendChild(pip);
+  }
+  return frag;
+}
 
 let state = {
   players: ['Spieler 1', 'Spieler 2'],
@@ -729,7 +770,7 @@ function renderDice() {
     if (d.locked) die.classList.add('locked');
     else if (d.used) die.classList.add('used');
     else if (d.selected) die.classList.add('selected');
-    die.textContent = DICE_FACES[d.value - 1];
+    die.appendChild(createDieFace(d.value));
     die.onclick = () => toggleSelect(i);
 
     const lbl = document.createElement('div');
