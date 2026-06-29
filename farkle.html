@@ -210,59 +210,70 @@
   }
 
   .die {
-    width: 90px;
-    height: 90px;
-    background: linear-gradient(145deg, #ffffff 0%, #ddd0be 100%);
-    border-radius: 14px;
+    width: 96px;
+    height: 96px;
+    background:
+      radial-gradient(ellipse at 28% 22%, rgba(255,255,255,0.85) 0%, transparent 55%),
+      linear-gradient(150deg, #fdf4e8 0%, #d4b888 100%);
+    border-radius: 16px;
     cursor: pointer;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    padding: 11px;
+    padding: 10px;
+    gap: 2px;
     box-shadow:
-      4px 8px 0 #c2a47a,
-      7px 13px 22px rgba(0,0,0,0.6),
-      inset 0 1px 0 rgba(255,255,255,1),
-      inset 1px 0 0 rgba(255,255,255,0.5);
+      5px 10px 0 #a07840,
+      9px 16px 28px rgba(0,0,0,0.7),
+      inset 0 2px 0 rgba(255,255,255,0.95),
+      inset 2px 0 0 rgba(255,255,255,0.5);
+    border: 1px solid rgba(160,120,60,0.4);
     transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
     position: relative;
     user-select: none;
   }
 
   .die:hover:not(.locked):not(.rolling):not(.used) {
-    transform: translateY(-5px);
+    transform: translateY(-6px);
     box-shadow:
-      4px 13px 0 #c2a47a,
-      7px 18px 24px rgba(0,0,0,0.65),
-      inset 0 1px 0 rgba(255,255,255,1);
+      5px 16px 0 #a07840,
+      9px 22px 30px rgba(0,0,0,0.75),
+      inset 0 2px 0 rgba(255,255,255,0.95);
   }
 
   .die.selected {
-    background: linear-gradient(145deg, #fffde8 0%, #f2d855 100%);
-    transform: translateY(-9px);
+    background:
+      radial-gradient(ellipse at 28% 22%, rgba(255,255,220,0.9) 0%, transparent 55%),
+      linear-gradient(150deg, #fff8c0 0%, #e8b800 100%);
+    border-color: var(--gold);
+    transform: translateY(-10px);
     box-shadow:
-      4px 15px 0 #9a7c08,
-      7px 20px 26px rgba(0,0,0,0.7),
-      inset 0 1px 0 rgba(255,255,255,0.95);
+      5px 17px 0 #806000,
+      9px 22px 32px rgba(0,0,0,0.75),
+      inset 0 2px 0 rgba(255,255,255,0.95);
   }
 
   .die.locked {
-    background: linear-gradient(145deg, #f0fff5 0%, #86d4a2 100%);
+    background:
+      radial-gradient(ellipse at 28% 22%, rgba(255,255,255,0.7) 0%, transparent 55%),
+      linear-gradient(150deg, #e8fff2 0%, #60c888 100%);
+    border-color: #27ae60;
     cursor: default;
     box-shadow:
-      4px 8px 0 #1a7236,
-      7px 13px 20px rgba(0,0,0,0.5),
-      inset 0 1px 0 rgba(255,255,255,0.9);
+      5px 10px 0 #157030,
+      9px 16px 26px rgba(0,0,0,0.6),
+      inset 0 2px 0 rgba(255,255,255,0.9);
   }
 
   .die.used {
-    background: linear-gradient(145deg, #e4e4e4 0%, #bcb4aa 100%);
-    opacity: 0.28;
+    background: linear-gradient(150deg, #d8d8d8 0%, #a8a8a8 100%);
+    opacity: 0.3;
     cursor: default;
     transform: none;
     box-shadow:
-      3px 5px 0 #949494,
-      5px 8px 12px rgba(0,0,0,0.28);
+      3px 6px 0 #888,
+      5px 9px 14px rgba(0,0,0,0.3);
+    border-color: transparent;
   }
 
   .die.rolling {
@@ -281,11 +292,11 @@
   }
 
   .pip {
-    width: 15px;
-    height: 15px;
+    width: 17px;
+    height: 17px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #4a3010, #130600);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.08);
+    background: radial-gradient(circle at 38% 32%, #5a3818, #1a0800);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.12);
     place-self: center;
   }
 
