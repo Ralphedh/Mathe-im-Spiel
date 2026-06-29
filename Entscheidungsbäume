@@ -1,0 +1,757 @@
+# =====================================================================
+#  MINIMALES BEISPIEL  –  zeigt das komplette Format
+# =====================================================================
+#
+#  Aufbau einer Baum-Datei:
+#
+#    title:      Überschrift, die oben im Diagramm erscheint (optional)
+#    direction:  TB = von oben nach unten (Standard)
+#                LR = von links nach rechts (gut für breite Bäume)
+#    root:       der oberste Knoten des Baums
+#
+#  Jeder Knoten hat:
+#    text:       die Beschriftung im Kästchen
+#    type:       decision | chance | outcome
+#                  decision = du triffst eine Wahl        (blaues Rechteck)
+#                  chance   = der Zufall entscheidet       (orange Raute)
+#                  outcome  = Endergebnis / Blatt          (grün/rot/grau)
+#    value:      nur bei type: outcome  ->  good | bad | neutral
+#    children:   Liste der untergeordneten Knoten (Verzweigungen)
+#
+#  Jedes Kind hat zusätzlich:
+#    branch:     Beschriftung der Kante (die Aktion / Bedingung)
+#    prob:       optionale Wahrscheinlichkeit, z. B. 0.3  ->  "(30 %)"
+#
+# =====================================================================
+
+title: "Minimalbeispiel: Soll ich die Karte abwerfen?"
+direction: TB
+
+root:
+  text: "Karte hilft mir noch?"
+  type: decision
+  children:
+    - branch: "ja"
+      text: "Karte behalten"
+      type: outcome
+      value: good
+
+    - branch: "nein"
+      text: "Hilft sie dem Gegner?"
+      type: decision
+      children:
+        - branch: "ja"
+          text: "ungünstig abwerfen"
+          type: outcome
+          value: bad
+        - branch: "nein"
+          text: "gefahrlos abwerfen"
+          type: outcome
+          value: good
+
+# =====================================================================
+#  Entscheidungsbaum:  Jetzt auslegen oder noch warten?
+#  ---------------------------------------------------------------
+#  Für die Erstmeldung ("Auslegen") werden in der Regel mindestens
+#  40 Punkte benötigt. Hat man sie zusammen, stellt sich die Frage,
+#  ob man sofort auslegt oder auf eine bessere Position wartet.
+# =====================================================================
+
+title: "Rommé – Auslegen oder warten?"
+direction: TB
+
+root:
+  text: "Habe ich mind. 40 Punkte\nfür die Erstmeldung?"
+  type: decision
+  children:
+
+    # ---- noch nicht genug Punkte ------------------------------------
+    - branch: "nein"
+      text: "weiter sammeln,\nnoch nicht auslegen"
+      type: outcome
+      value: neutral
+
+    # ---- genug Punkte: jetzt die eigentliche Entscheidung -----------
+    - branch: "ja"
+      text: "Jetzt auslegen\noder warten?"
+      type: decision
+      children:
+
+        # -- sofort auslegen --
+        - branch: "sofort auslegen"
+          text: "Legt ein Gegner\nvor mir aus?"
+          type: chance
+          children:
+            - branch: "ja"
+              prob: 0.4
+              text: "rechtzeitig gesichert –\nPunkte auf dem Tisch"
+              type: outcome
+              value: good
+            - branch: "nein"
+              prob: 0.6
+              text: "ausgelegt, aber Hand\nfrüh aufgedeckt"
+              type: outcome
+              value: neutral
+
+        # -- warten auf mehr Punkte / Anlegemöglichkeiten --
+        - branch: "warten"
+          text: "Komme ich vor\nSpielende noch dazu?"
+          type: chance
+          children:
+            - branch: "ja"
+              prob: 0.5
+              text: "mehr Punkte gelegt,\nbesseres Ergebnis"
+              type: outcome
+              value: good
+            - branch: "nein, Gegner\nbeendet vorher"
+              prob: 0.5
+              text: "auf voller Hand\nsitzengeblieben"
+              type: outcome
+              value: bad
+
+# =====================================================================
+#  Entscheidungsbaum:  Woher ziehe ich meine Karte?
+#  ---------------------------------------------------------------
+#  Zu Beginn des Zuges muss entschieden werden, ob vom verdeckten
+#  Stapel (unbekannte Karte) oder vom offenen Ablagestapel (bekannte
+#  Karte) gezogen wird.
+# =====================================================================
+
+title: "Rommé – Zugentscheidung: Woher ziehen?"
+direction: TB
+
+root:
+  text: "Ich bin am Zug.\nWoher ziehe ich?"
+  type: decision
+  children:
+
+    # ---- Variante A: verdeckter Stapel ------------------------------
+    - branch: "verdeckter Stapel"
+      text: "Welche Karte\nziehe ich?"
+      type: chance
+      children:
+        - branch: "passt in eine\nKombination"
+          prob: 0.35
+          text: "Hand verbessert –\nKarte einbauen"
+          type: outcome
+          value: good
+        - branch: "passt nicht"
+          prob: 0.65
+          text: "Karte wieder\nabwerfen müssen"
+          type: outcome
+          value: neutral
+
+    # ---- Variante B: offener Ablagestapel ---------------------------
+    - branch: "Ablagestapel\n(offene Karte)"
+      text: "Vervollständigt die\noffene Karte eine\nKombination?"
+      type: decision
+      children:
+        - branch: "ja"
+          text: "gezielt aufnehmen,\nKombination fertig"
+          type: outcome
+          value: good
+        - branch: "nein, aber sie\nfehlt dem Gegner"
+          text: "aufnehmen, um\nGegner zu blockieren"
+          type: outcome
+          value: neutral
+        - branch: "nein, nutzlos"
+          text: "besser verdeckt\nziehen"
+          type: outcome
+          value: bad
+
+"""Paket zum Erzeugen sauberer Entscheidungsbaum-Diagramme (Graphviz)."""
+
+from .renderer import (
+    EntscheidungsbaumRenderer,
+    RenderOptions,
+    render_tree,
+)
+
+__all__ = [
+    "EntscheidungsbaumRenderer",
+    "RenderOptions",
+    "render_tree",
+]
+
+"""
+Renderer für Entscheidungsbäume.
+
+Wandelt eine (verschachtelte) Baum-Definition in ein sauberes
+Graphviz-Diagramm um. Unterstützt drei Knotentypen:
+
+    decision : Entscheidung des Spielers   (Rechteck, blau)
+    chance   : Zufallsereignis / gezogene Karte (Raute, orange)
+    outcome  : Ergebnis / Blatt des Baums   (abgerundet; grün/rot/grau)
+
+Die eigentlichen Bäume werden in YAML-Dateien beschrieben – siehe den
+Ordner ``baeume/`` für Beispiele. Dieses Modul kümmert sich nur um das
+Aussehen und das Rendering.
+"""
+
+from __future__ import annotations
+
+import itertools
+from dataclasses import dataclass, field
+from typing import Any
+
+import graphviz
+
+
+# --------------------------------------------------------------------------
+# Farb- und Stil-Definitionen
+# --------------------------------------------------------------------------
+# Eine zurückhaltende, druckfreundliche Palette. Wenn du das Aussehen ändern
+# möchtest, ist hier die einzige Stelle, an der du etwas anpassen musst.
+
+STYLES: dict[str, dict[str, str]] = {
+    "decision": {
+        "shape": "box",
+        "style": "filled,rounded",
+        "color": "#3D5A80",       # Rahmen
+        "fillcolor": "#DCE6F2",   # Füllung
+        "fontcolor": "#1F2D3D",
+    },
+    "chance": {
+        "shape": "diamond",
+        "style": "filled",
+        "color": "#BF7B2E",
+        "fillcolor": "#FBEAD3",
+        "fontcolor": "#3D2A0E",
+    },
+    # Ergebnis-Knoten: die Variante (gut/schlecht/neutral) bestimmt die Farbe.
+    "outcome_good": {
+        "shape": "box",
+        "style": "filled,rounded",
+        "color": "#3F7D58",
+        "fillcolor": "#DCEFE2",
+        "fontcolor": "#1B3A28",
+    },
+    "outcome_bad": {
+        "shape": "box",
+        "style": "filled,rounded",
+        "color": "#A8453B",
+        "fillcolor": "#F5DDD9",
+        "fontcolor": "#4A1A15",
+    },
+    "outcome_neutral": {
+        "shape": "box",
+        "style": "filled,rounded",
+        "color": "#6B6B6B",
+        "fillcolor": "#EAEAEA",
+        "fontcolor": "#2B2B2B",
+    },
+}
+
+FONT = "Helvetica"
+
+
+@dataclass
+class RenderOptions:
+    """Optionen, die das gesamte Diagramm betreffen."""
+
+    title: str = ""
+    direction: str = "TB"          # TB = von oben nach unten, LR = von links nach rechts
+    fontsize_node: int = 12
+    fontsize_edge: int = 10
+    fontsize_title: int = 18
+    # Abstand zwischen den Ebenen bzw. zwischen Geschwisterknoten (in Zoll).
+    ranksep: float = 0.6
+    nodesep: float = 0.4
+
+
+# --------------------------------------------------------------------------
+# Hilfsfunktionen
+# --------------------------------------------------------------------------
+def _resolve_outcome_style(node: dict[str, Any]) -> dict[str, str]:
+    """Wählt für einen Ergebnis-Knoten den richtigen Stil anhand von ``value``."""
+    value = str(node.get("value", "neutral")).lower()
+    key = f"outcome_{value}"
+    if key not in STYLES:
+        key = "outcome_neutral"
+    return STYLES[key]
+
+
+def _node_style(node: dict[str, Any]) -> dict[str, str]:
+    node_type = str(node.get("type", "decision")).lower()
+    if node_type == "outcome":
+        return _resolve_outcome_style(node)
+    return STYLES.get(node_type, STYLES["decision"])
+
+
+def _format_edge_label(child: dict[str, Any]) -> str:
+    """Baut die Kantenbeschriftung, optional mit Wahrscheinlichkeit."""
+    branch = str(child.get("branch", "")).strip()
+    prob = child.get("prob")
+    if prob is None:
+        return branch
+    # Wahrscheinlichkeit als Prozentwert ergänzen, z. B. "ja (30 %)".
+    try:
+        prozent = f"{float(prob) * 100:.0f}\u202f%"
+    except (TypeError, ValueError):
+        prozent = str(prob)
+    if branch:
+        return f"{branch}\n({prozent})"
+    return prozent
+
+
+# --------------------------------------------------------------------------
+# Hauptklasse
+# --------------------------------------------------------------------------
+class EntscheidungsbaumRenderer:
+    """Erzeugt aus einer Baum-Definition ein Graphviz-Diagramm."""
+
+    def __init__(self, options: RenderOptions | None = None) -> None:
+        self.options = options or RenderOptions()
+        self._counter = itertools.count()
+
+    # -- öffentliche API ---------------------------------------------------
+    def build(self, root: dict[str, Any]) -> graphviz.Digraph:
+        """Erstellt das Graphviz-Objekt aus dem Wurzelknoten ``root``."""
+        opt = self.options
+        dot = graphviz.Digraph("Entscheidungsbaum")
+        dot.attr(
+            rankdir=opt.direction,
+            ranksep=str(opt.ranksep),
+            nodesep=str(opt.nodesep),
+            bgcolor="white",
+            splines="polyline",
+        )
+        dot.attr(
+            "node",
+            fontname=FONT,
+            fontsize=str(opt.fontsize_node),
+            margin="0.18,0.10",
+            penwidth="1.4",
+        )
+        dot.attr(
+            "edge",
+            fontname=FONT,
+            fontsize=str(opt.fontsize_edge),
+            fontcolor="#555555",
+            color="#7A7A7A",
+            penwidth="1.2",
+            arrowsize="0.8",
+        )
+
+        if opt.title:
+            dot.attr(
+                label=opt.title,
+                labelloc="t",
+                fontsize=str(opt.fontsize_title),
+                fontname=FONT,
+                fontcolor="#1F2D3D",
+            )
+
+        self._add_node(dot, root)
+        return dot
+
+    # -- interne Rekursion -------------------------------------------------
+    def _add_node(self, dot: graphviz.Digraph, node: dict[str, Any]) -> str:
+        node_id = f"n{next(self._counter)}"
+        text = str(node.get("text", node.get("label", "")))
+        style = _node_style(node)
+        dot.node(node_id, label=text, **style)
+
+        for child in node.get("children", []) or []:
+            child_id = self._add_node(dot, child)
+            label = _format_edge_label(child)
+            dot.edge(node_id, child_id, label=label)
+
+        return node_id
+
+
+# --------------------------------------------------------------------------
+# Bequeme Top-Level-Funktion
+# --------------------------------------------------------------------------
+def render_tree(
+    definition: dict[str, Any],
+    output_basename: str,
+    formats: tuple[str, ...] = ("png", "svg", "pdf"),
+) -> list[str]:
+    """
+    Rendert eine vollständige Baum-Definition in eine oder mehrere Dateien.
+
+    ``definition`` ist das eingelesene YAML-Dokument und muss mindestens den
+    Schlüssel ``root`` enthalten. Optional sind ``title``, ``direction`` usw.
+
+    Gibt die Liste der erzeugten Dateipfade zurück.
+    """
+    options = RenderOptions(
+        title=definition.get("title", ""),
+        direction=definition.get("direction", "TB"),
+    )
+    # Globale Optionen aus dem YAML übernehmen, falls vorhanden.
+    for key in ("fontsize_node", "fontsize_edge", "ranksep", "nodesep"):
+        if key in definition:
+            setattr(options, key, definition[key])
+
+    root = definition.get("root")
+    if root is None:
+        raise ValueError("Die Baum-Definition enthält keinen 'root'-Knoten.")
+
+    renderer = EntscheidungsbaumRenderer(options)
+    dot = renderer.build(root)
+
+    erzeugte: list[str] = []
+    for fmt in formats:
+        pfad = dot.render(output_basename, format=fmt, cleanup=True)
+        erzeugte.append(pfad)
+    return erzeugte
+
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Entscheidungsbaum Pages: 1 -->
+<svg width="812pt" height="339pt"
+ viewBox="0.00 0.00 811.50 339.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 335)">
+<title>Entscheidungsbaum</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-335 807.5,-335 807.5,4 -4,4"/>
+<text text-anchor="middle" x="401.75" y="-312.6" font-family="Helvetica,sans-Serif" font-size="18.00" fill="#1f2d3d">Rommé – Zugentscheidung: Woher ziehen?</text>
+<!-- n0 -->
+<g id="node1" class="node">
+<title>n0</title>
+<path fill="#dce6f2" stroke="#3d5a80" stroke-width="1.4" d="M384.5,-303C384.5,-303 280.5,-303 280.5,-303 274.5,-303 268.5,-297 268.5,-291 268.5,-291 268.5,-275 268.5,-275 268.5,-269 274.5,-263 280.5,-263 280.5,-263 384.5,-263 384.5,-263 390.5,-263 396.5,-269 396.5,-275 396.5,-275 396.5,-291 396.5,-291 396.5,-297 390.5,-303 384.5,-303"/>
+<text text-anchor="middle" x="332.5" y="-286.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Ich bin am Zug.</text>
+<text text-anchor="middle" x="332.5" y="-273.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Woher ziehe ich?</text>
+</g>
+<!-- n1 -->
+<g id="node2" class="node">
+<title>n1</title>
+<polygon fill="#fbead3" stroke="#bf7b2e" stroke-width="1.4" points="231.5,-197 125.5,-157 231.5,-117 337.5,-157 231.5,-197"/>
+<text text-anchor="middle" x="231.5" y="-160.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#3d2a0e">Welche Karte</text>
+<text text-anchor="middle" x="231.5" y="-147.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#3d2a0e">ziehe ich?</text>
+</g>
+<!-- n0&#45;&gt;n1 -->
+<g id="edge3" class="edge">
+<title>n0&#45;&gt;n1</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M313.44,-262.94C302.73,-252.23 291.5,-241 291.5,-241 291.5,-241 274.58,-217.6 258.71,-195.64"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="260.8,-193.75 253.84,-188.91 256.26,-197.03 260.8,-193.75"/>
+<text text-anchor="middle" x="335" y="-227.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">verdeckter Stapel</text>
+</g>
+<!-- n4 -->
+<g id="node5" class="node">
+<title>n4</title>
+<path fill="#dce6f2" stroke="#3d5a80" stroke-width="1.4" d="M562,-183.5C562,-183.5 449,-183.5 449,-183.5 443,-183.5 437,-177.5 437,-171.5 437,-171.5 437,-142.5 437,-142.5 437,-136.5 443,-130.5 449,-130.5 449,-130.5 562,-130.5 562,-130.5 568,-130.5 574,-136.5 574,-142.5 574,-142.5 574,-171.5 574,-171.5 574,-177.5 568,-183.5 562,-183.5"/>
+<text text-anchor="middle" x="505.5" y="-166.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Vervollständigt die</text>
+<text text-anchor="middle" x="505.5" y="-153.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">offene Karte eine</text>
+<text text-anchor="middle" x="505.5" y="-140.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Kombination?</text>
+</g>
+<!-- n0&#45;&gt;n4 -->
+<g id="edge7" class="edge">
+<title>n0&#45;&gt;n4</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M359.15,-262.9C386.85,-243.04 430.6,-211.68 463.06,-188.42"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="464.93,-190.52 469.81,-183.58 461.67,-185.97 464.93,-190.52"/>
+<text text-anchor="middle" x="453.5" y="-233" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">Ablagestapel</text>
+<text text-anchor="middle" x="453.5" y="-222" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(offene Karte)</text>
+</g>
+<!-- n2 -->
+<g id="node3" class="node">
+<title>n2</title>
+<path fill="#dcefe2" stroke="#3f7d58" stroke-width="1.4" d="M123,-40C123,-40 12,-40 12,-40 6,-40 0,-34 0,-28 0,-28 0,-12 0,-12 0,-6 6,0 12,0 12,0 123,0 123,0 129,0 135,-6 135,-12 135,-12 135,-28 135,-28 135,-34 129,-40 123,-40"/>
+<text text-anchor="middle" x="67.5" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">Hand verbessert –</text>
+<text text-anchor="middle" x="67.5" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">Karte einbauen</text>
+</g>
+<!-- n1&#45;&gt;n2 -->
+<g id="edge1" class="edge">
+<title>n1&#45;&gt;n2</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M198.71,-129.01C168.99,-104.54 125.58,-68.81 96.95,-45.24"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="98.67,-43.03 90.72,-40.11 95.11,-47.36 98.67,-43.03"/>
+<text text-anchor="middle" x="186" y="-87" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">passt in eine</text>
+<text text-anchor="middle" x="186" y="-76" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">Kombination</text>
+<text text-anchor="middle" x="186" y="-65" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(35 %)</text>
+</g>
+<!-- n3 -->
+<g id="node4" class="node">
+<title>n3</title>
+<path fill="#eaeaea" stroke="#6b6b6b" stroke-width="1.4" d="M286.5,-40C286.5,-40 176.5,-40 176.5,-40 170.5,-40 164.5,-34 164.5,-28 164.5,-28 164.5,-12 164.5,-12 164.5,-6 170.5,0 176.5,0 176.5,0 286.5,0 286.5,0 292.5,0 298.5,-6 298.5,-12 298.5,-12 298.5,-28 298.5,-28 298.5,-34 292.5,-40 286.5,-40"/>
+<text text-anchor="middle" x="231.5" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">Karte wieder</text>
+<text text-anchor="middle" x="231.5" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">abwerfen müssen</text>
+</g>
+<!-- n1&#45;&gt;n3 -->
+<g id="edge2" class="edge">
+<title>n1&#45;&gt;n3</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M231.5,-116.95C231.5,-94.97 231.5,-68.07 231.5,-48.35"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="234.3,-48.1 231.5,-40.1 228.7,-48.11 234.3,-48.1"/>
+<text text-anchor="middle" x="258.5" y="-81.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">passt nicht</text>
+<text text-anchor="middle" x="258.5" y="-70.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(65 %)</text>
+</g>
+<!-- n5 -->
+<g id="node6" class="node">
+<title>n5</title>
+<path fill="#dcefe2" stroke="#3f7d58" stroke-width="1.4" d="M457.5,-40C457.5,-40 339.5,-40 339.5,-40 333.5,-40 327.5,-34 327.5,-28 327.5,-28 327.5,-12 327.5,-12 327.5,-6 333.5,0 339.5,0 339.5,0 457.5,0 457.5,0 463.5,0 469.5,-6 469.5,-12 469.5,-12 469.5,-28 469.5,-28 469.5,-34 463.5,-40 457.5,-40"/>
+<text text-anchor="middle" x="398.5" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">gezielt aufnehmen,</text>
+<text text-anchor="middle" x="398.5" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">Kombination fertig</text>
+</g>
+<!-- n4&#45;&gt;n5 -->
+<g id="edge4" class="edge">
+<title>n4&#45;&gt;n5</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M485.12,-130.29C466.06,-106.23 437.74,-70.51 418.72,-46.51"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="420.78,-44.61 413.62,-40.08 416.4,-48.09 420.78,-44.61"/>
+<text text-anchor="middle" x="460.5" y="-76" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">ja</text>
+</g>
+<!-- n6 -->
+<g id="node7" class="node">
+<title>n6</title>
+<path fill="#eaeaea" stroke="#6b6b6b" stroke-width="1.4" d="M640,-40C640,-40 511,-40 511,-40 505,-40 499,-34 499,-28 499,-28 499,-12 499,-12 499,-6 505,0 511,0 511,0 640,0 640,0 646,0 652,-6 652,-12 652,-12 652,-28 652,-28 652,-34 646,-40 640,-40"/>
+<text text-anchor="middle" x="575.5" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">aufnehmen, um</text>
+<text text-anchor="middle" x="575.5" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">Gegner zu blockieren</text>
+</g>
+<!-- n4&#45;&gt;n6 -->
+<g id="edge5" class="edge">
+<title>n4&#45;&gt;n6</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M518.83,-130.29C531.14,-106.54 549.36,-71.42 561.79,-47.44"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="564.41,-48.47 565.61,-40.08 559.44,-45.89 564.41,-48.47"/>
+<text text-anchor="middle" x="596.5" y="-81.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein, aber sie</text>
+<text text-anchor="middle" x="596.5" y="-70.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">fehlt dem Gegner</text>
+</g>
+<!-- n7 -->
+<g id="node8" class="node">
+<title>n7</title>
+<path fill="#f5ddd9" stroke="#a8453b" stroke-width="1.4" d="M791.5,-40C791.5,-40 693.5,-40 693.5,-40 687.5,-40 681.5,-34 681.5,-28 681.5,-28 681.5,-12 681.5,-12 681.5,-6 687.5,0 693.5,0 693.5,0 791.5,0 791.5,0 797.5,0 803.5,-6 803.5,-12 803.5,-12 803.5,-28 803.5,-28 803.5,-34 797.5,-40 791.5,-40"/>
+<text text-anchor="middle" x="742.5" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#4a1a15">besser verdeckt</text>
+<text text-anchor="middle" x="742.5" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#4a1a15">ziehen</text>
+</g>
+<!-- n4&#45;&gt;n7 -->
+<g id="edge6" class="edge">
+<title>n4&#45;&gt;n7</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M564.48,-130.48C603.12,-113.77 646.5,-95 646.5,-95 646.5,-95 683.21,-66.7 711.23,-45.1"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="713.15,-47.16 717.78,-40.06 709.73,-42.72 713.15,-47.16"/>
+<text text-anchor="middle" x="720" y="-76" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein, nutzlos</text>
+</g>
+</g>
+</svg>
+
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Entscheidungsbaum Pages: 1 -->
+<svg width="432pt" height="254pt"
+ viewBox="0.00 0.00 432.00 254.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 250)">
+<title>Entscheidungsbaum</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-250 428,-250 428,4 -4,4"/>
+<text text-anchor="middle" x="212" y="-227.6" font-family="Helvetica,sans-Serif" font-size="18.00" fill="#1f2d3d">Minimalbeispiel: Soll ich die Karte abwerfen?</text>
+<!-- n0 -->
+<g id="node1" class="node">
+<title>n0</title>
+<path fill="#dce6f2" stroke="#3d5a80" stroke-width="1.4" d="M192.75,-218C192.75,-218 69.75,-218 69.75,-218 63.75,-218 57.75,-212 57.75,-206 57.75,-206 57.75,-194 57.75,-194 57.75,-188 63.75,-182 69.75,-182 69.75,-182 192.75,-182 192.75,-182 198.75,-182 204.75,-188 204.75,-194 204.75,-194 204.75,-206 204.75,-206 204.75,-212 198.75,-218 192.75,-218"/>
+<text text-anchor="middle" x="131.25" y="-196.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Karte hilft mir noch?</text>
+</g>
+<!-- n1 -->
+<g id="node2" class="node">
+<title>n1</title>
+<path fill="#dcefe2" stroke="#3f7d58" stroke-width="1.4" d="M124.75,-127C124.75,-127 33.75,-127 33.75,-127 27.75,-127 21.75,-121 21.75,-115 21.75,-115 21.75,-103 21.75,-103 21.75,-97 27.75,-91 33.75,-91 33.75,-91 124.75,-91 124.75,-91 130.75,-91 136.75,-97 136.75,-103 136.75,-103 136.75,-115 136.75,-115 136.75,-121 130.75,-127 124.75,-127"/>
+<text text-anchor="middle" x="79.25" y="-105.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">Karte behalten</text>
+</g>
+<!-- n0&#45;&gt;n1 -->
+<g id="edge1" class="edge">
+<title>n0&#45;&gt;n1</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M121.22,-181.84C113.31,-168.3 102.17,-149.24 93.36,-134.15"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="95.7,-132.6 89.25,-127.11 90.86,-135.43 95.7,-132.6"/>
+<text text-anchor="middle" x="114.25" y="-152" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">ja</text>
+</g>
+<!-- n2 -->
+<g id="node3" class="node">
+<title>n2</title>
+<path fill="#dce6f2" stroke="#3d5a80" stroke-width="1.4" d="M308.75,-127C308.75,-127 177.75,-127 177.75,-127 171.75,-127 165.75,-121 165.75,-115 165.75,-115 165.75,-103 165.75,-103 165.75,-97 171.75,-91 177.75,-91 177.75,-91 308.75,-91 308.75,-91 314.75,-91 320.75,-97 320.75,-103 320.75,-103 320.75,-115 320.75,-115 320.75,-121 314.75,-127 308.75,-127"/>
+<text text-anchor="middle" x="243.25" y="-105.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Hilft sie dem Gegner?</text>
+</g>
+<!-- n0&#45;&gt;n2 -->
+<g id="edge4" class="edge">
+<title>n0&#45;&gt;n2</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M152.84,-181.84C170.66,-167.68 196.07,-147.49 215.41,-132.12"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="217.2,-134.28 221.72,-127.11 213.72,-129.89 217.2,-134.28"/>
+<text text-anchor="middle" x="204.25" y="-152" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein</text>
+</g>
+<!-- n3 -->
+<g id="node4" class="node">
+<title>n3</title>
+<path fill="#f5ddd9" stroke="#a8453b" stroke-width="1.4" d="M217.25,-36C217.25,-36 95.25,-36 95.25,-36 89.25,-36 83.25,-30 83.25,-24 83.25,-24 83.25,-12 83.25,-12 83.25,-6 89.25,0 95.25,0 95.25,0 217.25,0 217.25,0 223.25,0 229.25,-6 229.25,-12 229.25,-12 229.25,-24 229.25,-24 229.25,-30 223.25,-36 217.25,-36"/>
+<text text-anchor="middle" x="156.25" y="-14.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#4a1a15">ungünstig abwerfen</text>
+</g>
+<!-- n2&#45;&gt;n3 -->
+<g id="edge2" class="edge">
+<title>n2&#45;&gt;n3</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M226.48,-90.84C212.88,-76.93 193.58,-57.19 178.66,-41.93"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="180.57,-39.87 172.97,-36.11 176.56,-43.79 180.57,-39.87"/>
+<text text-anchor="middle" x="209.25" y="-61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">ja</text>
+</g>
+<!-- n4 -->
+<g id="node5" class="node">
+<title>n4</title>
+<path fill="#dcefe2" stroke="#3f7d58" stroke-width="1.4" d="M390.25,-36C390.25,-36 270.25,-36 270.25,-36 264.25,-36 258.25,-30 258.25,-24 258.25,-24 258.25,-12 258.25,-12 258.25,-6 264.25,0 270.25,0 270.25,0 390.25,0 390.25,0 396.25,0 402.25,-6 402.25,-12 402.25,-12 402.25,-24 402.25,-24 402.25,-30 396.25,-36 390.25,-36"/>
+<text text-anchor="middle" x="330.25" y="-14.9" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">gefahrlos abwerfen</text>
+</g>
+<!-- n2&#45;&gt;n4 -->
+<g id="edge3" class="edge">
+<title>n2&#45;&gt;n4</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M260.02,-90.84C273.62,-76.93 292.92,-57.19 307.84,-41.93"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="309.94,-43.79 313.53,-36.11 305.93,-39.87 309.94,-43.79"/>
+<text text-anchor="middle" x="302.25" y="-61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein</text>
+</g>
+</g>
+</svg>
+
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 2.43.0 (0)
+ -->
+<!-- Title: Entscheidungsbaum Pages: 1 -->
+<svg width="709pt" height="423pt"
+ viewBox="0.00 0.00 709.00 423.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 419)">
+<title>Entscheidungsbaum</title>
+<polygon fill="white" stroke="transparent" points="-4,4 -4,-419 705,-419 705,4 -4,4"/>
+<text text-anchor="middle" x="350.5" y="-396.6" font-family="Helvetica,sans-Serif" font-size="18.00" fill="#1f2d3d">Rommé – Auslegen oder warten?</text>
+<!-- n0 -->
+<g id="node1" class="node">
+<title>n0</title>
+<path fill="#dce6f2" stroke="#3d5a80" stroke-width="1.4" d="M354,-387C354,-387 198,-387 198,-387 192,-387 186,-381 186,-375 186,-375 186,-359 186,-359 186,-353 192,-347 198,-347 198,-347 354,-347 354,-347 360,-347 366,-353 366,-359 366,-359 366,-375 366,-375 366,-381 360,-387 354,-387"/>
+<text text-anchor="middle" x="276" y="-370.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Habe ich mind. 40 Punkte</text>
+<text text-anchor="middle" x="276" y="-357.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">für die Erstmeldung?</text>
+</g>
+<!-- n1 -->
+<g id="node2" class="node">
+<title>n1</title>
+<path fill="#eaeaea" stroke="#6b6b6b" stroke-width="1.4" d="M284.5,-292C284.5,-292 161.5,-292 161.5,-292 155.5,-292 149.5,-286 149.5,-280 149.5,-280 149.5,-264 149.5,-264 149.5,-258 155.5,-252 161.5,-252 161.5,-252 284.5,-252 284.5,-252 290.5,-252 296.5,-258 296.5,-264 296.5,-264 296.5,-280 296.5,-280 296.5,-286 290.5,-292 284.5,-292"/>
+<text text-anchor="middle" x="223" y="-275.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">weiter sammeln,</text>
+<text text-anchor="middle" x="223" y="-262.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">noch nicht auslegen</text>
+</g>
+<!-- n0&#45;&gt;n1 -->
+<g id="edge1" class="edge">
+<title>n0&#45;&gt;n1</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M265.02,-346.73C257.2,-333.01 246.6,-314.42 238.01,-299.33"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="240.36,-297.81 233.97,-292.24 235.5,-300.58 240.36,-297.81"/>
+<text text-anchor="middle" x="263" y="-317" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein</text>
+</g>
+<!-- n2 -->
+<g id="node3" class="node">
+<title>n2</title>
+<path fill="#dce6f2" stroke="#3d5a80" stroke-width="1.4" d="M424.5,-292C424.5,-292 337.5,-292 337.5,-292 331.5,-292 325.5,-286 325.5,-280 325.5,-280 325.5,-264 325.5,-264 325.5,-258 331.5,-252 337.5,-252 337.5,-252 424.5,-252 424.5,-252 430.5,-252 436.5,-258 436.5,-264 436.5,-264 436.5,-280 436.5,-280 436.5,-286 430.5,-292 424.5,-292"/>
+<text text-anchor="middle" x="381" y="-275.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">Jetzt auslegen</text>
+<text text-anchor="middle" x="381" y="-262.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1f2d3d">oder warten?</text>
+</g>
+<!-- n0&#45;&gt;n2 -->
+<g id="edge8" class="edge">
+<title>n0&#45;&gt;n2</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M297.5,-346.96C313.64,-332.66 335.86,-312.98 353.33,-297.51"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="355.39,-299.42 359.53,-292.02 351.68,-295.23 355.39,-299.42"/>
+<text text-anchor="middle" x="337" y="-317" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">ja</text>
+</g>
+<!-- n3 -->
+<g id="node4" class="node">
+<title>n3</title>
+<polygon fill="#fbead3" stroke="#bf7b2e" stroke-width="1.4" points="202,-197 79,-157 202,-117 325,-157 202,-197"/>
+<text text-anchor="middle" x="202" y="-160.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#3d2a0e">Legt ein Gegner</text>
+<text text-anchor="middle" x="202" y="-147.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#3d2a0e">vor mir aus?</text>
+</g>
+<!-- n2&#45;&gt;n3 -->
+<g id="edge4" class="edge">
+<title>n2&#45;&gt;n3</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M350.64,-251.83C323.09,-234.44 282.03,-208.52 250.04,-188.33"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="251.2,-185.75 242.95,-183.85 248.22,-190.49 251.2,-185.75"/>
+<text text-anchor="middle" x="351" y="-222" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">sofort auslegen</text>
+</g>
+<!-- n6 -->
+<g id="node7" class="node">
+<title>n6</title>
+<polygon fill="#fbead3" stroke="#bf7b2e" stroke-width="1.4" points="510,-197 354,-157 510,-117 666,-157 510,-197"/>
+<text text-anchor="middle" x="510" y="-160.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#3d2a0e">Komme ich vor</text>
+<text text-anchor="middle" x="510" y="-147.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#3d2a0e">Spielende noch dazu?</text>
+</g>
+<!-- n2&#45;&gt;n6 -->
+<g id="edge7" class="edge">
+<title>n2&#45;&gt;n6</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M402.88,-251.83C421.02,-235.95 447.29,-212.93 469.27,-193.67"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="471.18,-195.73 475.35,-188.35 467.49,-191.52 471.18,-195.73"/>
+<text text-anchor="middle" x="454" y="-222" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">warten</text>
+</g>
+<!-- n4 -->
+<g id="node5" class="node">
+<title>n4</title>
+<path fill="#dcefe2" stroke="#3f7d58" stroke-width="1.4" d="M146,-40C146,-40 12,-40 12,-40 6,-40 0,-34 0,-28 0,-28 0,-12 0,-12 0,-6 6,0 12,0 12,0 146,0 146,0 152,0 158,-6 158,-12 158,-12 158,-28 158,-28 158,-34 152,-40 146,-40"/>
+<text text-anchor="middle" x="79" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">rechtzeitig gesichert –</text>
+<text text-anchor="middle" x="79" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">Punkte auf dem Tisch</text>
+</g>
+<!-- n3&#45;&gt;n4 -->
+<g id="edge2" class="edge">
+<title>n3&#45;&gt;n4</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M174.4,-125.7C152.64,-101.83 122.66,-68.92 102.15,-46.41"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="104.09,-44.38 96.63,-40.35 99.95,-48.15 104.09,-44.38"/>
+<text text-anchor="middle" x="161" y="-81.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">ja</text>
+<text text-anchor="middle" x="161" y="-70.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(40 %)</text>
+</g>
+<!-- n5 -->
+<g id="node6" class="node">
+<title>n5</title>
+<path fill="#eaeaea" stroke="#6b6b6b" stroke-width="1.4" d="M331,-40C331,-40 199,-40 199,-40 193,-40 187,-34 187,-28 187,-28 187,-12 187,-12 187,-6 193,0 199,0 199,0 331,0 331,0 337,0 343,-6 343,-12 343,-12 343,-28 343,-28 343,-34 337,-40 331,-40"/>
+<text text-anchor="middle" x="265" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">ausgelegt, aber Hand</text>
+<text text-anchor="middle" x="265" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#2b2b2b">früh aufgedeckt</text>
+</g>
+<!-- n3&#45;&gt;n5 -->
+<g id="edge3" class="edge">
+<title>n3&#45;&gt;n5</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M217.9,-121.93C228.68,-98.84 242.71,-68.75 252.65,-47.46"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="255.27,-48.47 256.12,-40.04 250.2,-46.1 255.27,-48.47"/>
+<text text-anchor="middle" x="261" y="-81.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein</text>
+<text text-anchor="middle" x="261" y="-70.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(60 %)</text>
+</g>
+<!-- n7 -->
+<g id="node8" class="node">
+<title>n7</title>
+<path fill="#dcefe2" stroke="#3f7d58" stroke-width="1.4" d="M540,-40C540,-40 416,-40 416,-40 410,-40 404,-34 404,-28 404,-28 404,-12 404,-12 404,-6 410,0 416,0 416,0 540,0 540,0 546,0 552,-6 552,-12 552,-12 552,-28 552,-28 552,-34 546,-40 540,-40"/>
+<text text-anchor="middle" x="478" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">mehr Punkte gelegt,</text>
+<text text-anchor="middle" x="478" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1b3a28">besseres Ergebnis</text>
+</g>
+<!-- n6&#45;&gt;n7 -->
+<g id="edge5" class="edge">
+<title>n6&#45;&gt;n7</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M501.26,-119.11C495.95,-96.74 489.3,-68.68 484.47,-48.31"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="487.16,-47.5 482.59,-40.36 481.71,-48.79 487.16,-47.5"/>
+<text text-anchor="middle" x="510" y="-81.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">ja</text>
+<text text-anchor="middle" x="510" y="-70.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(50 %)</text>
+</g>
+<!-- n8 -->
+<g id="node9" class="node">
+<title>n8</title>
+<path fill="#f5ddd9" stroke="#a8453b" stroke-width="1.4" d="M689,-40C689,-40 593,-40 593,-40 587,-40 581,-34 581,-28 581,-28 581,-12 581,-12 581,-6 587,0 593,0 593,0 689,0 689,0 695,0 701,-6 701,-12 701,-12 701,-28 701,-28 701,-34 695,-40 689,-40"/>
+<text text-anchor="middle" x="641" y="-23.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#4a1a15">auf voller Hand</text>
+<text text-anchor="middle" x="641" y="-10.4" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#4a1a15">sitzengeblieben</text>
+</g>
+<!-- n6&#45;&gt;n8 -->
+<g id="edge6" class="edge">
+<title>n6&#45;&gt;n8</title>
+<path fill="none" stroke="#7a7a7a" stroke-width="1.2" d="M540.38,-124.69C563.6,-100.77 595.17,-68.23 616.71,-46.03"/>
+<polygon fill="#7a7a7a" stroke="#7a7a7a" stroke-width="1.2" points="618.95,-47.75 622.51,-40.06 614.93,-43.85 618.95,-47.75"/>
+<text text-anchor="middle" x="635.5" y="-87" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">nein, Gegner</text>
+<text text-anchor="middle" x="635.5" y="-76" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">beendet vorher</text>
+<text text-anchor="middle" x="635.5" y="-65" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#555555">(50 %)</text>
+</g>
+</g>
+</svg>
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Gerenderte Ausgaben
+# -------------------
+# Standardmäßig werden eigene Renderings ignoriert. Die mitgelieferten
+# Beispielbilder im Ordner beispiel_ausgaben/ bleiben aber erhalten.
+output/
