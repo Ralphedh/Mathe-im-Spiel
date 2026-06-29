@@ -515,6 +515,32 @@
   .name-input:focus { border-color: var(--gold); }
   .name-input::placeholder { opacity: 0.4; }
 
+  .mode-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 8px;
+    padding: 11px 10px;
+    font-family: 'Lato', sans-serif;
+    font-size: 0.9rem;
+    color: rgba(245,240,232,0.55);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mode-btn.active {
+    background: rgba(201,168,76,0.18);
+    border-color: var(--gold);
+    color: var(--gold);
+    font-weight: 700;
+  }
+
   .winner-icon {
     font-size: 4rem;
     margin-bottom: 12px;
@@ -666,14 +692,18 @@
 <div class="overlay show" id="startOverlay">
   <div class="modal">
     <div class="modal-title">FARKLE</div>
-    <div class="modal-sub">Zwei Spieler · Ein Würfelbecher</div>
+    <div class="modal-sub">Würfle um dein Leben</div>
     <div class="modal-body">
       Wer als Erster <strong>10.000 Punkte</strong> erreicht, löst die Schlussrunde aus.<br>
       Danach hat der andere Spieler noch einen letzten Zug.
     </div>
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="mode1p" onclick="setMode(1)">👤 vs. Computer</button>
+      <button class="mode-btn" id="mode2p" onclick="setMode(2)">👥 2 Spieler</button>
+    </div>
     <div class="name-inputs">
-      <input class="name-input" id="input0" placeholder="Name Spieler 1" maxlength="16" value="Spieler 1">
-      <input class="name-input" id="input1" placeholder="Name Spieler 2" maxlength="16" value="Spieler 2">
+      <input class="name-input" id="input0" placeholder="Dein Name" maxlength="16" value="Spieler 1">
+      <input class="name-input" id="input1" placeholder="Name Spieler 2" maxlength="16" value="Spieler 2" style="display:none">
     </div>
     <button class="btn btn-roll" onclick="startGame()" style="width:100%;font-size:1rem;padding:16px;">Spiel starten</button>
   </div>
@@ -713,25 +743,38 @@ function createDieFace(value) {
   return frag;
 }
 
+let gameMode = 1; // 1 = vs Computer, 2 = 2 Spieler
+
 let state = {
-  players: ['Spieler 1', 'Spieler 2'],
+  players: ['Spieler 1', '🤖 Computer'],
   scores: [0, 0],
-  current: 0,           // active player index
+  current: 0,
   round: 1,
-  dice: [],             // [{value, selected, locked, used}]
-  roundScore: 0,        // total accumulated this turn (locked dice)
+  dice: [],
+  roundScore: 0,
   rolling: false,
   hasRolled: false,
   finalRound: false,
   finalRoundStarter: -1,
   finalRoundDone: [false, false],
   gameOver: false,
+  isComputer: [false, true],
+  aiPlaying: false,
 };
+
+function setMode(mode) {
+  gameMode = mode;
+  document.getElementById('mode1p').classList.toggle('active', mode === 1);
+  document.getElementById('mode2p').classList.toggle('active', mode === 2);
+  document.getElementById('input1').style.display = mode === 2 ? '' : 'none';
+}
 
 function startGame() {
   const n0 = document.getElementById('input0').value.trim() || 'Spieler 1';
-  const n1 = document.getElementById('input1').value.trim() || 'Spieler 2';
+  const n1 = gameMode === 2 ? (document.getElementById('input1').value.trim() || 'Spieler 2') : '🤖 Computer';
   state.players = [n0, n1];
+  state.isComputer = [false, gameMode === 1];
+  state.aiPlaying = false;
   document.getElementById('pname0').textContent = n0;
   document.getElementById('pname1').textContent = n1;
   document.getElementById('startOverlay').classList.remove('show');
@@ -762,6 +805,8 @@ function resetGame() {
     finalRoundStarter: -1,
     finalRoundDone: [false, false],
     gameOver: false,
+    isComputer: state.isComputer,
+    aiPlaying: false,
   };
   document.getElementById('lastRoundBanner').classList.remove('show');
   initDice(6);
@@ -813,7 +858,7 @@ function animateRoll(indices) {
 // ─── TOGGLE SELECTION ──────────────────────────────────────────────────────────
 function toggleSelect(i) {
   const d = state.dice[i];
-  if (!state.hasRolled || d.locked || d.used || state.rolling) return;
+  if (!state.hasRolled || d.locked || d.used || state.rolling || state.aiPlaying) return;
   d.selected = !d.selected;
   renderDice();
   updateScorePreview();
@@ -822,7 +867,7 @@ function toggleSelect(i) {
 
 // ─── ROLL ─────────────────────────────────────────────────────────────────────
 async function rollDice() {
-  if (state.rolling || state.gameOver) return;
+  if (state.rolling || state.gameOver || state.aiPlaying) return;
 
   // Determine which dice to roll
   const freeIndices = state.dice
@@ -1003,6 +1048,9 @@ function nextPlayer() {
   updateUI();
   document.getElementById('statusMsg').textContent = 'Würfle, um zu beginnen!';
   document.getElementById('statusMsg').className = 'status-msg';
+  if (!state.gameOver && state.isComputer && state.isComputer[state.current]) {
+    setTimeout(aiTurn, 900);
+  }
 }
 
 // ─── END GAME ─────────────────────────────────────────────────────────────────
@@ -1096,6 +1144,12 @@ function updateScorePreview() {
 
 // ─── BUTTONS ──────────────────────────────────────────────────────────────────
 function updateButtons() {
+  if (state.aiPlaying) {
+    document.getElementById('btnRoll').disabled = true;
+    document.getElementById('btnLock').disabled = true;
+    document.getElementById('btnBank').disabled = true;
+    return;
+  }
   const hasSelected = state.dice.some(d => d.selected);
   const selectedPts = hasSelected ? scoreForDice(state.dice.filter(d => d.selected).map(d => d.value)) : 0;
   const canBank = state.roundScore > 0 || (hasSelected && selectedPts > 0);
@@ -1143,6 +1197,125 @@ function updateScoreBoards() {
     const pct = Math.min(100, (state.scores[i] / GOAL) * 100);
     document.getElementById(`prog${i}`).style.width = pct + '%';
   }
+}
+
+// ─── AI OPPONENT ──────────────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function bestAISelection(freeDice) {
+  const values = freeDice.map(d => d.value);
+  if (values.length === 6 && (detectStraight(values) || detectThreePairs(values))) {
+    return freeDice.map(d => d.idx);
+  }
+  const counts = Array(7).fill(0);
+  values.forEach(v => counts[v]++);
+  const selected = [];
+  for (let face = 1; face <= 6; face++) {
+    if (counts[face] >= 3) {
+      let rem = counts[face];
+      freeDice.forEach(d => { if (d.value === face && rem > 0) { selected.push(d.idx); rem--; } });
+    }
+  }
+  const taken = new Set(selected);
+  freeDice.forEach(d => {
+    if (!taken.has(d.idx) && (d.value === 1 || d.value === 5)) selected.push(d.idx);
+  });
+  return selected;
+}
+
+function aiShouldBank() {
+  const rs = state.roundScore;
+  const total = state.scores[state.current] + rs;
+  const opp = state.scores[1 - state.current];
+  const free = state.dice.filter(d => !d.locked && !d.used).length;
+  if (total >= GOAL) return true;
+  if (opp >= 8000 && rs < 800) return false;
+  const thresholds = [0, 300, 500, 700, 900, 1100, 1400];
+  const jitter = (Math.random() - 0.5) * 80;
+  return rs >= (thresholds[free] || 500) + jitter;
+}
+
+async function aiTurn() {
+  if (state.gameOver || !state.isComputer || !state.isComputer[state.current]) return;
+  state.aiPlaying = true;
+  updateButtons();
+  document.getElementById('statusMsg').textContent = '🤖 Computer überlegt...';
+  document.getElementById('statusMsg').className = 'status-msg';
+  await sleep(800);
+
+  while (!state.gameOver) {
+    // Hot dice reset
+    if (!state.dice.some(d => !d.locked && !d.used)) {
+      state.dice.forEach(d => { d.locked = false; d.used = false; d.selected = false; });
+      state.hasRolled = false;
+      renderDice();
+    }
+
+    // Roll
+    const rollIdx = state.dice.map((d, i) => (!d.locked && !d.used) ? i : -1).filter(i => i >= 0);
+    state.rolling = true;
+    renderDice();
+    await animateRoll(rollIdx);
+    rollIdx.forEach(i => { state.dice[i].value = Math.ceil(Math.random() * 6); state.dice[i].selected = false; });
+    state.hasRolled = true;
+    state.rolling = false;
+    renderDice();
+    await sleep(400);
+
+    // Farkle check
+    const freeVals = state.dice.filter(d => !d.locked && !d.used).map(d => d.value);
+    if (!hasAnyScore(freeVals)) {
+      state.aiPlaying = false;
+      triggerFarkle();
+      return;
+    }
+
+    // Select best dice
+    const freeDice = state.dice.map((d, i) => ({...d, idx: i})).filter(d => !d.locked && !d.used);
+    const toSelect = bestAISelection(freeDice);
+    toSelect.forEach(i => { state.dice[i].selected = true; });
+    renderDice();
+    updateScorePreview();
+    await sleep(650);
+
+    // Lock
+    const selDice = state.dice.filter(d => d.selected);
+    const pts = scoreForDice(selDice.map(d => d.value));
+    selDice.forEach(d => { d.locked = true; d.selected = false; });
+    state.roundScore += pts;
+    document.getElementById('statusMsg').textContent = `+${pts} Punkte gesichert`;
+    document.getElementById('statusMsg').className = 'status-msg good';
+    renderDice();
+    updateScorePreview();
+    updateUI();
+    await sleep(500);
+
+    // Hot dice?
+    const freeLeft = state.dice.filter(d => !d.locked && !d.used).length;
+    if (freeLeft === 0) {
+      document.getElementById('hotFlash').classList.remove('show');
+      void document.getElementById('hotFlash').offsetWidth;
+      document.getElementById('hotFlash').classList.add('show');
+      document.getElementById('statusMsg').textContent = '🔥 Hot Dice! Alle Würfel neu!';
+      document.getElementById('statusMsg').className = 'status-msg hot';
+      state.dice.forEach(d => { d.locked = false; d.used = false; d.selected = false; });
+      state.hasRolled = false;
+      renderDice();
+      await sleep(900);
+      continue;
+    }
+
+    // Bank or roll again?
+    if (aiShouldBank()) {
+      state.aiPlaying = false;
+      bankPoints();
+      return;
+    }
+    document.getElementById('statusMsg').textContent = '🤖 Computer würfelt nochmal...';
+    document.getElementById('statusMsg').className = 'status-msg';
+    await sleep(700);
+  }
+  state.aiPlaying = false;
 }
 
 // Enter key for name inputs
